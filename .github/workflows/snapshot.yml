@@ -1,0 +1,45 @@
+name: 📸 Canvas Snapshot
+
+on:
+  schedule:
+    # Run every hour at :00
+    - cron: '0 * * * *'
+  workflow_dispatch: # Allow manual runs
+
+permissions:
+  contents: write # Needed to commit the snapshot PNG
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install canvas dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+          npm install canvas
+
+      - name: Run snapshot script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/snapshot.js
+
+      - name: Commit snapshot (if changed)
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add history/
+          # Only commit if there's something to commit
+          git diff --staged --quiet || git commit -m "📸 canvas snapshot $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push

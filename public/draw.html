@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+  <title>Null_README — Draw</title>
+  <meta name="description" content="A live collaborative pixel art canvas embedded in a GitHub README." />
+
+  <!-- Auto-redirect if no session. nc_auth is a non-sensitive flag cookie. -->
+  <script>
+    function getCookie(n) {
+      const m = document.cookie.match(new RegExp('(^| )' + n + '=([^;]+)'));
+      return m ? m[2] : null;
+    }
+    if (!getCookie('nc_auth')) window.location.replace('/api/auth/github');
+  </script>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body { background: #0d1117; color: #e6edf3; font-family: 'Courier New', monospace; margin: 0; }
+
+    .pixel-cell {
+      cursor: pointer;
+      border: 0.5px solid rgba(255,255,255,0.05);
+      transition: transform 0.08s, box-shadow 0.08s;
+    }
+    .pixel-cell:hover { transform: scale(1.2); z-index: 10; box-shadow: 0 0 0 1.5px #58a6ff; position: relative; }
+    .pixel-cell.selected { transform: scale(1.25); z-index: 20; box-shadow: 0 0 0 2px #fff; position: relative; }
+
+    .canvas-scroll { overflow: auto; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
+
+    .swatch { width: 26px; height: 26px; border-radius: 3px; cursor: pointer; border: 2px solid transparent; transition: transform 0.1s, border-color 0.1s; }
+    .swatch:hover { transform: scale(1.25); }
+    .swatch.on { border-color: #fff; transform: scale(1.2); }
+
+    @keyframes fadeIn { from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)} }
+    .fi { animation: fadeIn 0.3s ease forwards; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.4} }
+    .pulse { animation: pulse 1.5s ease-in-out infinite; }
+
+    .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+    .coord { display:inline-block; background:#161b22; border:1px solid #30363d; border-radius:3px; padding:1px 5px; font-size:10px; font-family:monospace; color:#8b949e; }
+
+    ::-webkit-scrollbar { width:4px; height:4px; }
+    ::-webkit-scrollbar-track { background:#161b22; }
+    ::-webkit-scrollbar-thumb { background:#30363d; border-radius:2px; }
+  </style>
+</head>
+<body>
+
+<div id="root">
+  <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+    <div style="text-align:center;font-family:monospace;">
+      <div style="color:#58a6ff;font-size:2rem;" class="pulse">▒</div>
+      <p style="color:#484f58;font-size:11px;margin-top:8px;letter-spacing:.1em;">LOADING...</p>
+    </div>
+  </div>
+</div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const GRID = 50;
+const MAX_PIXELS = 4;
+const REPO_OWNER = window.__REPO_OWNER__ || 'YOUR_USERNAME';
+
+const PALETTE = [
+  'FFFFFF','C0C0C0','808080','404040','000000',
+  'FF0000','FF6600','FF9900','FFCC00','FFFF00',
+  '99FF00','00FF00','00FF99','00FFFF','00CCFF',
+  '0066FF','0000FF','6600FF','CC00FF','FF00CC',
+  'FF6699','FFAAAA','FFD9AA','FFFAAA','AAFFAA',
+  'AAFFFF','AACCFF','CCAAFF','FF69B4','DEB887',
+  '8B4513','20B2AA',
+];
+
+function contrast(hex) {
+  const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+  return (r*.299+g*.587+b*.114)>128?'000000':'FFFFFF';
+}
+
+// ── StarGate ──────────────────────────────────────────────────────────────────
+function StarGate({ username }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="max-w-sm w-full fi">
+        <div className="text-center mb-6">
+          <p className="text-xs text-gray-600 tracking-widest mb-1">Null_README</p>
+          <h1 className="text-2xl font-bold text-white">One step away.</h1>
+          <p className="text-sm text-gray-500 mt-1">You're in as @{username}.</p>
+        </div>
+
+        <div className="border border-gray-700 rounded-xl overflow-hidden">
+          <div className="bg-gray-900 px-5 py-5">
+            <p className="text-white font-semibold text-sm mb-2">⭐ Star the repo to get your 4 pixels</p>
+            <p className="text-gray-400 text-xs leading-relaxed">
+              Everyone who stars gets exactly <strong className="text-white">4 pixels</strong> to place anywhere on the canvas. Your username and coordinates go on the board permanently.
+            </p>
+          </div>
+          <div className="border-t border-gray-700 bg-gray-900/40 px-5 py-4 space-y-2.5">
+            <a
+              href={`https://github.com/${REPO_OWNER}/Null_README`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full bg-yellow-500 hover:bg-yellow-400 text-black font-bold text-sm py-3 rounded-lg transition-colors"
+            >
+              ★ Star Null_README on GitHub ↗
+            </a>
+            <a
+              href="/api/auth/github"
+              className="flex items-center justify-center w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-sm py-2.5 rounded-lg transition-colors"
+            >
+              I've starred it — verify &amp; continue →
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PixelBudget ───────────────────────────────────────────────────────────────
+// Shows 4 dots — filled for used, empty for remaining
+function PixelBudget({ used, max }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-gray-500">your pixels</span>
+      <div className="flex gap-1.5">
+        {Array.from({length: max}).map((_, i) => (
+          <div
+            key={i}
+            className="w-3 h-3 rounded-sm border border-gray-600"
+            style={{ background: i < used ? '#3fb950' : 'transparent' }}
+          />
+        ))}
+      </div>
+      <span className="text-xs text-gray-600">{max - used} left</span>
+    </div>
+  );
+}
+
+// ── ColorPicker ───────────────────────────────────────────────────────────────
+function ColorPicker({ color, onSelect }) {
+  const [custom, setCustom] = useState('');
+  const handleCustom = e => {
+    const v = e.target.value.replace('#','').toUpperCase();
+    setCustom(v);
+    if (/^[0-9A-F]{6}$/.test(v)) onSelect(v);
+  };
+  return (
+    <div>
+      <div
+        className="w-full h-8 rounded mb-2 border border-gray-700 flex items-center justify-center text-xs font-mono font-bold transition-colors"
+        style={{ background:`#${color}`, color:`#${contrast(color)}` }}
+      >
+        #{color}
+      </div>
+      <div className="grid grid-cols-8 gap-1 mb-2">
+        {PALETTE.map(c => (
+          <button key={c} onClick={()=>{onSelect(c);setCustom('');}} className={`swatch ${color===c?'on':''}`} style={{background:`#${c}`}} title={`#${c}`} />
+        ))}
+      </div>
+      <input
+        type="text" value={custom} onChange={handleCustom}
+        placeholder="Custom hex e.g. FF5733" maxLength={6}
+        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs font-mono text-gray-300 focus:outline-none focus:border-blue-500 placeholder-gray-700"
+      />
+    </div>
+  );
+}
+
+// ── ParticipantList ───────────────────────────────────────────────────────────
+// Simple list — no ranks, no counts. Just who's here and where they painted.
+function ParticipantList({ participants, currentUser }) {
+  if (!participants.length) return (
+    <div className="py-8 text-center">
+      <p className="text-gray-600 text-xs">No one has drawn yet.</p>
+      <p className="text-gray-700 text-xs mt-1">Be the first.</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-2">
+      {participants.map((p, i) => {
+        const isMe = currentUser?.username === p.username;
+        return (
+          <div
+            key={p.username}
+            className={`flex items-start gap-2.5 p-2 rounded-lg ${isMe ? 'bg-blue-900/15 border border-blue-900/40' : 'hover:bg-gray-800/30'}`}
+            style={{ animation:`fadeIn 0.25s ease ${i*.03}s both` }}
+          >
+            <img src={p.avatarUrl} className="w-7 h-7 rounded-full flex-shrink-0 mt-0.5" alt="" />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={`https://github.com/${p.username}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-400 hover:text-blue-300 font-mono"
+                >
+                  @{p.username}
+                </a>
+                {isMe && <span className="text-xs text-blue-800">you</span>}
+              </div>
+              {/* Their pixel coordinates */}
+              {p.recentPixels?.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {p.recentPixels.map((px, j) => (
+                    <span
+                      key={j}
+                      className="coord"
+                      style={{ borderColor:`#${px.hex}55`, color:`#8b949e` }}
+                    >
+                      <span
+                        className="dot mr-1"
+                        style={{ width:8, height:8, background:`#${px.hex}`, verticalAlign:'middle', display:'inline-block', borderRadius:2, border:'1px solid rgba(255,255,255,0.1)' }}
+                      />
+                      ({px.x},{px.y})
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── PixelGrid ─────────────────────────────────────────────────────────────────
+function PixelGrid({ pixels, selected, onSelect, zoom }) {
+  const sz = Math.max(5, Math.round(10 * zoom));
+  return (
+    <div className="canvas-scroll border border-gray-800 rounded-lg" style={{ maxHeight:'calc(100vh - 220px)' }}>
+      <div style={{
+        display:'grid',
+        gridTemplateColumns:`repeat(${GRID},${sz}px)`,
+        width:`${GRID*sz}px`,
+        lineHeight:0, fontSize:0,
+      }}>
+        {pixels.map((px, i) => {
+          const isSel = selected?.x===px.x && selected?.y===px.y;
+          return (
+            <div
+              key={i}
+              onClick={() => onSelect(px)}
+              title={px.last_user ? `(${px.x},${px.y}) · @${px.last_user}` : `(${px.x},${px.y})`}
+              className={`pixel-cell${isSel?' selected':''}`}
+              style={{ width:sz, height:sz, background:`#${px.hex||'FFFFFF'}`, boxSizing:'border-box' }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [user, setUser]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [pixels, setPixels]     = useState([]);
+  const [participants, setP]    = useState([]);
+  const [selected, setSelected] = useState(null);
+  const [color, setColor]       = useState('FF0000');
+  const [zoom, setZoom]         = useState(1.0);
+  const [busy, setBusy]         = useState(false);
+  const [msg, setMsg]           = useState(null); // { ok, text }
+  const [tab, setTab]           = useState('canvas');
+  const [done, setDone]         = useState(false); // all 4 pixels used
+
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/me', { credentials:'include' }).then(r=>r.json()),
+      fetch('/api/canvas-data').then(r=>r.json()),
+      fetch('/api/participants').then(r=>r.json()),
+    ]).then(([me, canvas, parts]) => {
+      setUser(me.user);
+      if (me.user?.pixelsRemaining === 0) setDone(true);
+
+      if (canvas.pixels) {
+        const map = {};
+        canvas.pixels.forEach(p => { map[`${p.x},${p.y}`] = p; });
+        const full = [];
+        for (let y=0; y<GRID; y++)
+          for (let x=0; x<GRID; x++)
+            full.push(map[`${x},${y}`] || { x, y, hex:'FFFFFF', last_user:null });
+        setPixels(full);
+      }
+      setP(parts.participants || []);
+    }).catch(console.error).finally(() => setLoading(false));
+
+    // Poll for updates every 20s
+    const t = setInterval(() => {
+      fetch('/api/canvas-data').then(r=>r.json()).then(d => {
+        if (!d.pixels) return;
+        const map = {};
+        d.pixels.forEach(p => { map[`${p.x},${p.y}`] = p; });
+        setPixels(prev => prev.map(px => map[`${px.x},${px.y}`] || px));
+      }).catch(()=>{});
+      fetch('/api/participants').then(r=>r.json()).then(d => setP(d.participants||[])).catch(()=>{});
+    }, 20000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleSelect = px => {
+    if (done) return;
+    setSelected(p => p?.x===px.x && p?.y===px.y ? null : px);
+    setMsg(null);
+  };
+
+  const handleCommit = async () => {
+    if (!selected || busy || done) return;
+    setBusy(true); setMsg(null);
+
+    try {
+      const res = await fetch('/api/pixel', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type':'application/json' },
+        body: JSON.stringify({ x:selected.x, y:selected.y, hex:color }),
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        // Update canvas locally
+        setPixels(prev => prev.map(px =>
+          px.x===selected.x && px.y===selected.y
+            ? { ...px, hex:color, last_user:user.username }
+            : px
+        ));
+        const newRemaining = data.pixelsRemaining;
+        setUser(u => ({ ...u, pixelCount:(u.pixelCount||0)+1, pixelsRemaining:newRemaining }));
+        setSelected(null);
+
+        if (newRemaining === 0) {
+          setDone(true);
+          setMsg({ ok:true, text:'All 4 pixels placed. Your mark is on the canvas forever.' });
+          // Redirect to the GitHub repo after a moment
+          setTimeout(() => { window.location.href = `https://github.com/${REPO_OWNER}/Null_README`; }, 3000);
+        } else {
+          setMsg({ ok:true, text:`✓ Placed. ${newRemaining} pixel${newRemaining===1?'':'s'} remaining.` });
+        }
+
+        // Refresh participants
+        setTimeout(() => {
+          fetch('/api/participants').then(r=>r.json()).then(d => setP(d.participants||[]));
+        }, 500);
+
+      } else if (res.status===403 && data.code==='NO_PIXELS_LEFT') {
+        setDone(true);
+        setMsg({ ok:false, text:'All 4 pixels already placed.' });
+      } else if (res.status===403 && data.code==='STAR_REQUIRED') {
+        setUser(u => ({ ...u, hasStarred:false }));
+      } else {
+        setMsg({ ok:false, text: data.error || 'Something went wrong.' });
+      }
+    } catch {
+      setMsg({ ok:false, text:'Network error. Try again.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ── Loading ────────────────────────────────────────────────────────────────
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="text-blue-400 text-4xl pulse">▒</div>
+        <p className="text-gray-600 text-xs mt-3 tracking-widest">LOADING CANVAS...</p>
+      </div>
+    </div>
+  );
+
+  // ── Star gate ──────────────────────────────────────────────────────────────
+  if (user && !user.hasStarred) return <StarGate username={user.username} />;
+
+  const canCommit = selected && user && !busy && !done;
+
+  // ── Main ───────────────────────────────────────────────────────────────────
+  return (
+    <div className="min-h-screen flex flex-col">
+
+      {/* Header */}
+      <div className="border-b border-gray-800 bg-gray-900/90 px-4 py-2.5 sticky top-0 z-50 backdrop-blur">
+        <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
+          <span className="text-blue-400 font-bold tracking-widest text-sm">▒ Null_README</span>
+          {user && (
+            <div className="flex items-center gap-3">
+              <PixelBudget used={user.pixelCount||0} max={MAX_PIXELS} />
+              <img src={user.avatarUrl} alt="" className="w-6 h-6 rounded-full border border-gray-700" />
+              <span className="text-xs text-gray-400 font-mono hidden sm:block">@{user.username}</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile tabs */}
+      <div className="lg:hidden border-b border-gray-800 bg-gray-900 flex">
+        {[['canvas','📐 Canvas'],[`people`,`👥 Who's here (${participants.length})`]].map(([t,label])=>(
+          <button key={t} onClick={()=>setTab(t)} className={`flex-1 py-2 text-xs tracking-widest uppercase transition-colors ${tab===t?'text-blue-400 border-b-2 border-blue-500':'text-gray-600'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 max-w-5xl mx-auto w-full px-3 py-3">
+        <div className="flex flex-col lg:flex-row gap-4">
+
+          {/* Canvas */}
+          <div className={`flex-1 min-w-0 ${tab==='people'?'hidden lg:block':''}`}>
+
+            {/* Done banner */}
+            {done && (
+              <div className="mb-3 bg-green-900/20 border border-green-800/50 rounded-lg px-4 py-3 fi">
+                <p className="text-sm text-green-400 font-semibold">Your 4 pixels are placed. ✓</p>
+                <p className="text-xs text-gray-500 mt-0.5">Your mark is on the canvas permanently. Check the Architects list to see your coordinates.</p>
+              </div>
+            )}
+
+            {/* Zoom + status */}
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-gray-600 truncate">
+                {done
+                  ? <span className="text-green-700">all pixels placed</span>
+                  : selected
+                    ? <span className="text-gray-400">({selected.x},{selected.y}){selected.last_user?` · @${selected.last_user}`:' · unclaimed'}</span>
+                    : 'tap any pixel to select it'
+                }
+              </p>
+              <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                <button onClick={()=>setZoom(z=>Math.max(.5,z-.2))} className="w-6 h-6 bg-gray-800 hover:bg-gray-700 rounded text-gray-400 text-xs transition-colors">−</button>
+                <span className="text-xs text-gray-600 w-8 text-center">{Math.round(zoom*100)}%</span>
+                <button onClick={()=>setZoom(z=>Math.min(4,z+.2))} className="w-6 h-6 bg-gray-800 hover:bg-gray-700 rounded text-gray-400 text-xs transition-colors">+</button>
+              </div>
+            </div>
+
+            <PixelGrid pixels={pixels} selected={selected} onSelect={handleSelect} zoom={zoom} />
+
+            {/* Mobile controls */}
+            {!done && (
+              <div className="lg:hidden mt-3 space-y-3">
+                <div className="border border-gray-800 rounded-lg p-3 bg-gray-900/50">
+                  <ColorPicker color={color} onSelect={setColor} />
+                </div>
+                <button
+                  onClick={handleCommit} disabled={!canCommit}
+                  className={`w-full py-3 rounded-lg font-bold text-sm transition-all ${canCommit?'bg-green-700 hover:bg-green-600 text-white':'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
+                >
+                  {busy ? 'PLACING...' : !selected ? 'SELECT A PIXEL FIRST' : `PLACE #${color} AT (${selected.x},${selected.y})`}
+                </button>
+                {msg && (
+                  <p className={`text-xs text-center fi ${msg.ok?'text-green-400':'text-yellow-400'}`}>{msg.text}</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Sidebar */}
+          <div className={`lg:w-64 space-y-4 ${tab==='canvas'?'hidden lg:flex lg:flex-col':''}`}>
+
+            {/* Desktop: color + commit */}
+            {!done && (
+              <div className="hidden lg:block space-y-3">
+                <div className="border border-gray-800 rounded-lg p-4 bg-gray-900/50">
+                  <p className="text-xs text-gray-600 uppercase tracking-widest mb-3">Color</p>
+                  <ColorPicker color={color} onSelect={setColor} />
+                </div>
+
+                <div className="border border-gray-800 rounded-lg p-4 bg-gray-900/50">
+                  <p className="text-xs text-gray-600 uppercase tracking-widest mb-3">Place Pixel</p>
+
+                  {selected ? (
+                    <div className="flex items-center gap-2 mb-3 p-2 bg-gray-800/50 rounded fi">
+                      <div className="w-7 h-7 rounded border border-gray-700 flex-shrink-0" style={{background:`#${color}`}} />
+                      <div className="text-xs">
+                        <p className="text-gray-300 font-mono">({selected.x}, {selected.y})</p>
+                        <p className="text-gray-600">→ #{color}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-700 mb-3 text-center">← select a pixel on the canvas</p>
+                  )}
+
+                  <button
+                    onClick={handleCommit} disabled={!canCommit}
+                    className={`w-full py-2.5 rounded-lg font-bold text-sm transition-all ${canCommit?'bg-green-700 hover:bg-green-600 text-white':'bg-gray-800 text-gray-600 cursor-not-allowed'}`}
+                  >
+                    {busy?'PLACING...':!selected?'SELECT A PIXEL':'PLACE PIXEL'}
+                  </button>
+
+                  {msg && (
+                    <p className={`text-xs mt-2 text-center fi ${msg.ok?'text-green-400':'text-yellow-400'}`}>{msg.text}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Done state on desktop */}
+            {done && (
+              <div className="hidden lg:block border border-green-900/50 bg-green-900/10 rounded-lg p-4 fi">
+                <p className="text-sm text-green-400 font-semibold mb-1">All 4 pixels placed ✓</p>
+                <p className="text-xs text-gray-500">Your coordinates are listed below. Your mark is permanent.</p>
+              </div>
+            )}
+
+            {/* Participants */}
+            <div className="border border-gray-800 rounded-lg overflow-hidden flex-1">
+              <div className="bg-gray-900/80 px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                <p className="text-xs text-gray-400 uppercase tracking-widest">Who's here</p>
+                <span className="text-xs text-gray-600 font-mono">{participants.length}</span>
+              </div>
+              <div className="p-3 overflow-y-auto" style={{maxHeight:'420px'}}>
+                <ParticipantList participants={participants} currentUser={user} />
+              </div>
+            </div>
+
+            <div className="text-center pb-1">
+              <a href={`https://github.com/${REPO_OWNER}/Null_README`} target="_blank" rel="noopener noreferrer" className="text-xs text-gray-700 hover:text-gray-500 transition-colors">
+                ↳ view on GitHub
+              </a>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div className="border-t border-gray-800 py-2.5 text-center">
+        <p className="text-xs text-gray-800 font-mono">
+          Null_README · live svg · 50×50 ·&nbsp;
+          <a href="/api/canvas.svg" target="_blank" className="hover:text-gray-600 transition-colors">raw svg ↗</a>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

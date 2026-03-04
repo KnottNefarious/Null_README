@@ -1,0 +1,40 @@
+name: 📊 Update README Stats
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-stats:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fetch stats and update README
+        env:
+          SITE_URL: ${{ secrets.SITE_URL }}
+        run: |
+          STATS=$(curl -sf "${SITE_URL}/api/stats" || echo '{"totalPainters":0,"lastPatch":null}')
+
+          TOTAL=$(echo "$STATS" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('totalPainters',0))")
+          LAST_USER=$(echo "$STATS" | python3 -c "import sys,json; d=json.load(sys.stdin); lp=d.get('lastPatch'); print('@'+lp['last_user'] if lp else 'none yet')")
+
+          sed -i "s/<!-- STAT:TOTAL -->[0-9]*/<!-- STAT:TOTAL -->${TOTAL}/g" README.md
+          sed -i "s/<!-- STAT:LAST -->@[a-zA-Z0-9_-]*/<!-- STAT:LAST -->${LAST_USER}/g" README.md
+
+          echo "Updated: ${TOTAL} painters, last: ${LAST_USER}"
+
+      - name: Commit if changed
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git diff --staged --quiet || git commit -m "📊 stats update $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push
