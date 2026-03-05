@@ -1,7 +1,6 @@
 // scripts/snapshot.js
 // Run by GitHub Actions every hour.
 // Fetches the current canvas, generates a PNG, and saves it if changed.
-// Requires: npm install canvas (devDependency)
 
 const { createCanvas } = require('canvas');
 const fs = require('fs');
@@ -15,9 +14,8 @@ const CANVAS_PX = GRID * PIXEL_SIZE;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
-async function fetchPixels() {
-  const res = await fetch(
-async function fetchPixels() {
+async function fetchColoredPixels() {
+  // Only fetch non-white pixels — avoids the 1000 row default limit
   const res = await fetch(
     `${SUPABASE_URL}/rest/v1/pixels?select=x,y,hex&hex=neq.FFFFFF&limit=2500`,
     {
@@ -30,12 +28,11 @@ async function fetchPixels() {
   if (!res.ok) throw new Error(`Supabase fetch failed: ${res.status}`);
   return res.json();
 }
-  if (!res.ok) throw new Error(`Supabase fetch failed: ${res.status}`);
-  return res.json();
-}
 
 function pixelsToHash(pixels) {
-  const str = pixels.map(p => `${p.x},${p.y},${p.hex}`).join('|');
+  // Sort by position so hash is consistent regardless of return order
+  const sorted = [...pixels].sort((a, b) => (a.y * 50 + a.x) - (b.y * 50 + b.x));
+  const str = sorted.map(p => `${p.x},${p.y},${p.hex}`).join('|');
   return crypto.createHash('sha256').update(str).digest('hex');
 }
 
@@ -43,10 +40,10 @@ async function main() {
   console.log('📸 Null_README Snapshot Script');
   console.log('Fetching pixel data...');
 
-  const pixels = await fetchPixels();
-  console.log(`Fetched ${pixels.length} pixels.`);
+  const coloredPixels = await fetchColoredPixels();
+  console.log(`Fetched ${coloredPixels.length} colored pixels.`);
 
-  const hash = pixelsToHash(pixels);
+  const hash = pixelsToHash(coloredPixels);
   const hashFile = path.join(__dirname, '../history/latest_hash.txt');
 
   // Check if canvas has changed since last snapshot
@@ -62,9 +59,9 @@ async function main() {
 
   console.log('Canvas has changed! Generating PNG...');
 
-  // Build pixel map
+  // Build pixel map from colored pixels only
   const pixelMap = {};
-  pixels.forEach(p => {
+  coloredPixels.forEach(p => {
     pixelMap[`${p.x},${p.y}`] = p.hex || 'FFFFFF';
   });
 
@@ -76,12 +73,14 @@ async function main() {
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, CANVAS_PX, CANVAS_PX);
 
-  // Draw pixels
+  // Draw colored pixels
   for (let y = 0; y < GRID; y++) {
     for (let x = 0; x < GRID; x++) {
-      const hex = pixelMap[`${x},${y}`] || 'FFFFFF';
-      ctx.fillStyle = `#${hex}`;
-      ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+      const hex = pixelMap[`${x},${y}`];
+      if (hex && hex !== 'FFFFFF') {
+        ctx.fillStyle = `#${hex}`;
+        ctx.fillRect(x * PIXEL_SIZE, y * PIXEL_SIZE, PIXEL_SIZE, PIXEL_SIZE);
+      }
     }
   }
 
@@ -112,7 +111,7 @@ async function main() {
   const historyDir = path.join(__dirname, '../history');
   if (!fs.existsSync(historyDir)) fs.mkdirSync(historyDir, { recursive: true });
 
-  // Save the PNG with ISO timestamp in filename
+  // Save PNG with ISO timestamp in filename
   const filename = now.toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.png';
   const outPath = path.join(historyDir, filename);
   const buffer = canvas.toBuffer('image/png');
@@ -122,7 +121,7 @@ async function main() {
   // Update latest hash
   fs.writeFileSync(hashFile, hash);
 
-  // Update latest.png symlink (for easy README embedding)
+  // Copy to latest.png
   const latestPath = path.join(historyDir, 'latest.png');
   if (fs.existsSync(latestPath)) fs.unlinkSync(latestPath);
   fs.copyFileSync(outPath, latestPath);
