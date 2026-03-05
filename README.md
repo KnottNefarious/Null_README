@@ -47,7 +47,7 @@ This creates a permanent time-lapse of the art's evolution.
 
 ## Rules
 
-- **One pixel every 30 seconds** per GitHub account
+- **4 pixels total** per GitHub account (star the repo to unlock)
 - **Must star this repo** to unlock drawing access
 - No JavaScript runs on GitHub's servers — this is a pure HTTP trick
 - Every pixel is permanent (but paintable over)
