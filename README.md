@@ -13,7 +13,7 @@
 ---
 
 ## How is this possible? 
-                           🕜
+                           
 This image updates in **real-time** — but GitHub isn't running any code.
 
 Here's the trick: GitHub routes all README images through a caching proxy called **Camo**. Normally, Camo saves a copy of an image forever. But if the server responds with specific HTTP headers — `Cache-Control: no-cache, no-store, must-revalidate` — Camo is forced to re-fetch the image on every page load.
