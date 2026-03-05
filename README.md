@@ -26,9 +26,9 @@ Our server is a **serverless function** that generates SVG code on the fly. Ever
 
 ## Current Architects 
 
-**Total Contributors:** <!-- STAT:TOTAL -->0
+**Total Contributors:** <!-- STAT:TOTAL -->1
 
-**Latest Patch by:** <!-- STAT:LAST -->@none
+**Latest Patch by:** <!-- STAT:LAST -->@KnottNefarious
 
 ---
 
