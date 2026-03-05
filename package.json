@@ -9,9 +9,6 @@
   "dependencies": {
     "jsonwebtoken": "^9.0.2"
   },
-  "devDependencies": {
-    "canvas": "^2.11.2"
-  },
   "engines": {
     "node": ">=18"
   }
