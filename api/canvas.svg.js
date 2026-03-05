@@ -8,7 +8,6 @@ const PIXEL_SIZE = 10;
 const CANVAS_SIZE = GRID * PIXEL_SIZE; // 500px
 
 module.exports = async (req, res) => {
-  // These headers are what tricks GitHub's Camo proxy
   res.setHeader('Content-Type', 'image/svg+xml');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.setHeader('Pragma', 'no-cache');
@@ -16,32 +15,31 @@ module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {
-    // Fetch all 2,500 pixels from Supabase in one request
+    // Only fetch non-white pixels — avoids the 1000 row default limit
+    // since most pixels will be white. Canvas starts all white by default.
     const response = await fetch(
-      `${process.env.SUPABASE_URL}/rest/v1/pixels?select=x,y,hex&order=id.asc&limit=2500`,
+      `${process.env.SUPABASE_URL}/rest/v1/pixels?select=x,y,hex&hex=neq.FFFFFF&limit=2500`,
       {
         headers: {
           'apikey': process.env.SUPABASE_SERVICE_KEY,
           'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
-          'Range': '0-2499',
         },
-        // Short timeout so GitHub's proxy doesn't hang
         signal: AbortSignal.timeout(8000),
       }
     );
 
     if (!response.ok) throw new Error(`Supabase error: ${response.status}`);
-    const pixels = await response.json();
+    const coloredPixels = await response.json();
 
-    // Build a lookup map: "x,y" -> hex color
+    // Build a lookup map of only colored pixels: "x,y" -> hex
+    // Everything else defaults to white when building the SVG
     const pixelMap = {};
-    pixels.forEach(p => {
+    coloredPixels.forEach(p => {
       pixelMap[`${p.x},${p.y}`] = p.hex || 'FFFFFF';
     });
 
     // Build SVG rect elements
-    // Animation: rows cascade in from top to bottom (row 0 first, row 49 last)
-    // Each row fades in 0.04s after the previous one = 2s total animation
+    // Animation: rows cascade in from top to bottom
     let rects = '';
     for (let y = 0; y < GRID; y++) {
       const delay = (y * 0.04).toFixed(2);
@@ -51,13 +49,11 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Thin grid lines overlay for visual clarity
+    // Thin grid lines overlay
     let gridLines = '';
-    // Vertical lines every 10 pixels
     for (let x = 0; x <= GRID; x++) {
       gridLines += `<line x1="${x * PIXEL_SIZE}" y1="0" x2="${x * PIXEL_SIZE}" y2="${CANVAS_SIZE}" stroke="#00000010" stroke-width="0.5"/>`;
     }
-    // Horizontal lines every 10 pixels
     for (let y = 0; y <= GRID; y++) {
       gridLines += `<line x1="0" y1="${y * PIXEL_SIZE}" x2="${CANVAS_SIZE}" y2="${y * PIXEL_SIZE}" stroke="#00000010" stroke-width="0.5"/>`;
     }
@@ -74,7 +70,6 @@ ${gridLines}
 
   } catch (err) {
     console.error('canvas.svg error:', err);
-    // Fallback: serve a placeholder so GitHub doesn't show a broken image
     res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${CANVAS_SIZE}" height="${CANVAS_SIZE}" viewBox="0 0 ${CANVAS_SIZE} ${CANVAS_SIZE}">
   <rect width="${CANVAS_SIZE}" height="${CANVAS_SIZE}" fill="#0d1117"/>
