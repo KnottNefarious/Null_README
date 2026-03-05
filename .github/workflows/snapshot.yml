@@ -39,7 +39,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          git pull --rebase origin main
           git add history/
-          # Only commit if there's something to commit
           git diff --staged --quiet || git commit -m "📸 canvas snapshot $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push
