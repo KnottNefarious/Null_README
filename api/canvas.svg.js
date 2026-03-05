@@ -23,6 +23,7 @@ module.exports = async (req, res) => {
         headers: {
           'apikey': process.env.SUPABASE_SERVICE_KEY,
           'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+          'Range': '0-2499',
         },
         // Short timeout so GitHub's proxy doesn't hang
         signal: AbortSignal.timeout(8000),
