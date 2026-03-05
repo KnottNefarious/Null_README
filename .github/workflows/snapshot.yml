@@ -41,5 +41,4 @@ jobs:
           git config --local user.name "GitHub Action"
           git pull --rebase origin main
           git add history/
-          git diff --staged --quiet || git commit -m "📸 canvas snapshot $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git push
+          git diff --staged --quiet || (git commit -m "📸 canvas snapshot $(date -u +'%Y-%m-%d %H:%M UTC')" && git push)
