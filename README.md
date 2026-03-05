@@ -32,10 +32,6 @@ Our server is a **serverless function** that generates SVG code on the fly. Ever
 
 ---
 
-## Top Architects
-
----
-
 ## Canvas History
 
 The canvas is automatically snapshotted every hour (only when it has changed).
