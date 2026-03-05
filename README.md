@@ -12,8 +12,8 @@
 
 ---
 
-## How is this possible?
-
+## How is this possible? 
+                           🕜
 This image updates in **real-time** — but GitHub isn't running any code.
 
 Here's the trick: GitHub routes all README images through a caching proxy called **Camo**. Normally, Camo saves a copy of an image forever. But if the server responds with specific HTTP headers — `Cache-Control: no-cache, no-store, must-revalidate` — Camo is forced to re-fetch the image on every page load.
@@ -24,7 +24,7 @@ Our server is a **serverless function** that generates SVG code on the fly. Ever
 
 ---
 
-## Current Architects
+## Current Architects 
 
 **Total Contributors:** <!-- STAT:TOTAL -->0
 
@@ -33,10 +33,6 @@ Our server is a **serverless function** that generates SVG code on the fly. Ever
 ---
 
 ## Top Architects
-
-| Rank | Architect | Pixels Placed |
-|------|-----------|--------------|
-| — | *No contributors yet* | 0 |
 
 ---
 
@@ -61,7 +57,7 @@ This creates a permanent time-lapse of the art's evolution.
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
+|-------|------------|
 | Image serving | Vercel Serverless (Node.js) |
 | Database | Supabase (PostgreSQL) |
 | Auth | GitHub OAuth |
