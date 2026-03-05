@@ -17,7 +17,9 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 async function fetchPixels() {
   const res = await fetch(
-    `${SUPABASE_URL}/rest/v1/pixels?select=x,y,hex&order=id.asc&limit=2500`,
+async function fetchPixels() {
+  const res = await fetch(
+    `${SUPABASE_URL}/rest/v1/pixels?select=x,y,hex&hex=neq.FFFFFF&limit=2500`,
     {
       headers: {
         'apikey': SUPABASE_SERVICE_KEY,
@@ -25,6 +27,9 @@ async function fetchPixels() {
       },
     }
   );
+  if (!res.ok) throw new Error(`Supabase fetch failed: ${res.status}`);
+  return res.json();
+}
   if (!res.ok) throw new Error(`Supabase fetch failed: ${res.status}`);
   return res.json();
 }
