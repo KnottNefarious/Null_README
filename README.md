@@ -67,5 +67,5 @@ This creates a permanent time-lapse of the art's evolution.
 ---
 
 <div align="center">
-<sub>Null_README · A live SVG exploit · Built by <a href="https://github.com/YOUR_USERNAME">@YOUR_USERNAME</a></sub>
+<sub>Null_README · A live SVG exploit · Built by <a href="https://github.com/KnottNefarious">@KnottNefarious</a></sub>
 </div>
